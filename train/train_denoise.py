@@ -25,6 +25,7 @@ torch.backends.cudnn.benchmark = True
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from torchvision import utils as vutils
 from natsort import natsorted
 import glob
 import random
@@ -32,7 +33,6 @@ import time
 import numpy as np
 from einops import rearrange, repeat
 import datetime
-from pdb import set_trace as stx
 
 from losses import CharbonnierLoss
 
@@ -40,12 +40,11 @@ from tqdm import tqdm
 from warmup_scheduler import GradualWarmupScheduler
 from torch.optim.lr_scheduler import StepLR
 from timm.utils import NativeScaler
-
 # from utils.loader import  get_training_data,get_validation_data
+from pdb import set_trace
 
 
-
-######### Logs dir ###########
+######### Logs dir ########### ./logs/denoising/car/Uformer_B_0516
 log_dir = os.path.join(opt.save_dir, 'denoising', opt.dataset, opt.arch+opt.env)
 if not os.path.exists(log_dir):
     os.makedirs(log_dir)
@@ -73,21 +72,20 @@ with open(logname,'a') as f:
 start_epoch = 1
 if opt.optimizer.lower() == 'adam':
     optimizer = optim.Adam(model_restoration.parameters(), lr=opt.lr_initial, betas=(0.9, 0.999),eps=1e-8, weight_decay=opt.weight_decay)
-elif opt.optimizer.lower() == 'adamw':
+elif opt.optimizer.lower() == 'adamw': # True
         optimizer = optim.AdamW(model_restoration.parameters(), lr=opt.lr_initial, betas=(0.9, 0.999),eps=1e-8, weight_decay=opt.weight_decay)
 else:
     raise Exception("Error optimizer...")
 
 
 ######### DataParallel ########### 
-model_restoration = torch.nn.DataParallel (model_restoration) 
-model_restoration.cuda() 
-     
+model_restoration = torch.nn.DataParallel(model_restoration)
+model_restoration.cuda()
 
 ######### Scheduler ###########
-if opt.warmup:
+if opt.warmup:  # True
     print("Using warmup and cosine strategy!")
-    warmup_epochs = opt.warmup_epochs
+    warmup_epochs = opt.warmup_epochs   # 3
     scheduler_cosine = optim.lr_scheduler.CosineAnnealingLR(optimizer, opt.nepoch-warmup_epochs, eta_min=1e-6)
     scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=warmup_epochs, after_scheduler=scheduler_cosine)
     scheduler.step()
@@ -98,8 +96,8 @@ else:
     scheduler.step()
 
 ######### Resume ########### 
-if opt.resume: 
-    path_chk_rest = opt.pretrain_weights 
+if opt.resume: # False
+    path_chk_rest = opt.pretrain_weights # ./log/Uformer_B/models/model_best.pth
     print("Resume from "+path_chk_rest)
     utils.load_checkpoint(model_restoration,path_chk_rest) 
     start_epoch = utils.load_start_epoch(path_chk_rest) + 1 
@@ -125,15 +123,17 @@ criterion = CharbonnierLoss().cuda()
 
 ######### DataLoader ###########
 print('===> Loading datasets')
-img_options_train = {'patch_size':opt.train_ps}
+img_options_train = {'patch_size':opt.train_ps} # 128
 train_dataset = get_training_data(opt.train_dir, img_options_train)
 train_loader = DataLoader(dataset=train_dataset, batch_size=opt.batch_size, shuffle=True, 
         num_workers=opt.train_workers, pin_memory=False, drop_last=False)
+        # num_workers=0, pin_memory=False, drop_last=False)
 val_dataset = get_validation_data(opt.val_dir)
 val_loader = DataLoader(dataset=val_dataset, batch_size=opt.batch_size, shuffle=False, 
         num_workers=opt.eval_workers, pin_memory=False, drop_last=False)
+        # num_workers=0, pin_memory=False, drop_last=False)
 
-len_trainset = train_dataset.__len__()
+len_trainset = train_dataset.__len__()  # 30
 len_valset = val_dataset.__len__()
 print("Sizeof training set: ", len_trainset,", sizeof validation set: ", len_valset)
 ######### validation ###########
@@ -175,14 +175,22 @@ for epoch in range(start_epoch, opt.nepoch + 1):
         target = data[0].cuda()
         input_ = data[1].cuda()
 
-        if epoch>5:
-            target, input_ = utils.MixUp_AUG().aug(target, input_)
+        # data augmentation
+        if random.random() < 0.5:
+            render_noise = input_ - target
+            partial = random.random()
+            input_ = target + partial * render_noise
+
+        # if epoch>5:
+        #     target, input_ = utils.MixUp_AUG().aug(target, input_)
         with torch.cuda.amp.autocast():
             restored = model_restoration(input_)
+            
             loss = criterion(restored, target)
         loss_scaler(
                 loss, optimizer,parameters=model_restoration.parameters())
         epoch_loss +=loss.item()
+        
 
         #### Evaluation ####
         if (i+1)%eval_now==0 and i>0:
@@ -197,6 +205,9 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                         restored = model_restoration(input_)
                     restored = torch.clamp(restored,0,1)  
                     psnr_val_rgb.append(utils.batch_PSNR(restored, target, False).item())
+                    cat = torch.cat([input_, target, restored], dim=0)
+                    filename = os.path.join(result_dir, '%06d.png' % ii)
+                    vutils.save_image(cat, filename, nrow=len(target))
 
                 psnr_val_rgb = sum(psnr_val_rgb)/len_valset
                 

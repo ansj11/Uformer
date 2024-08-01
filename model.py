@@ -9,6 +9,7 @@ import math
 import numpy as np
 import time
 from torch import einsum
+from pdb import set_trace
 
 
 class FastLeFF(nn.Module):
@@ -29,7 +30,8 @@ class FastLeFF(nn.Module):
     def forward(self, x):
         # bs x hw x c
         bs, hw, c = x.size()
-        hh = int(math.sqrt(hw))
+        hh = int(math.sqrt(hw/12)*3)
+        ww = int(math.sqrt(hw/12)*4)
 
         x = self.linear1(x)
 
@@ -214,8 +216,8 @@ class LPU(nn.Module):
     def forward(self, x):
         B, L, C = x.shape
         # import pdb;pdb.set_trace()
-        H = int(math.sqrt(L))
-        W = int(math.sqrt(L))
+        H = int(math.sqrt(L/12)*3)
+        W = int(math.sqrt(L/12)*4)
         x = x.transpose(1, 2).contiguous().view(B, C, H, W)
         result = (self.depthwise(x) + x).flatten(2).transpose(1,2).contiguous()  # B H*W C
         return result
@@ -235,8 +237,8 @@ class PosCNN(nn.Module):
 
     def forward(self, x, H=None, W=None):
         B, N, C = x.shape
-        H = H or int(math.sqrt(N))
-        W = W or int(math.sqrt(N))
+        H = H or int(math.sqrt(N/12)*3)
+        W = W or int(math.sqrt(N/12)*4)
         feat_token = x
         cnn_feat = feat_token.transpose(1, 2).view(B, C, H, W)
         if self.s == 1:
@@ -393,8 +395,8 @@ class ConvProjection(nn.Module):
 
     def forward(self, x, attn_kv=None):
         b, n, c, h = *x.shape, self.heads
-        l = int(math.sqrt(n))
-        w = int(math.sqrt(n))
+        l = int(math.sqrt(n/12)*3)
+        w = int(math.sqrt(n/12)*4)
 
         attn_kv = x if attn_kv is None else attn_kv
         x = rearrange(x, 'b (l w) c -> b c l w', l=l, w=w)
@@ -666,18 +668,18 @@ class LeFF(nn.Module):
     def forward(self, x):
         # bs x hw x c
         bs, hw, c = x.size()
-        hh = int(math.sqrt(hw))
+        hh, ww = int(math.sqrt(hw/12)*3), int(math.sqrt(hw/12)*4)
 
         x = self.linear1(x)
 
         # spatial restore
-        x = rearrange(x, ' b (h w) (c) -> b c h w ', h = hh, w = hh)
+        x = rearrange(x, ' b (h w) (c) -> b c h w ', h = hh, w = ww)
         # bs,hidden_dim,32x32
 
         x = self.dwconv(x)
 
         # flaten
-        x = rearrange(x, ' b c h w -> b (h w) c', h = hh, w = hh)
+        x = rearrange(x, ' b c h w -> b (h w) c', h = hh, w = ww)
 
         x = self.linear2(x)
         x = self.eca(x)
@@ -739,8 +741,8 @@ class Downsample(nn.Module):
     def forward(self, x):
         B, L, C = x.shape
         # import pdb;pdb.set_trace()
-        H = int(math.sqrt(L))
-        W = int(math.sqrt(L))
+        H = int(math.sqrt(L/12)*3)
+        W = int(math.sqrt(L/12)*4)
         x = x.transpose(1, 2).contiguous().view(B, C, H, W)
         out = self.conv(x).flatten(2).transpose(1,2).contiguous()  # B H*W C
         return out
@@ -764,8 +766,8 @@ class Upsample(nn.Module):
         
     def forward(self, x):
         B, L, C = x.shape
-        H = int(math.sqrt(L))
-        W = int(math.sqrt(L))
+        H = int(math.sqrt(L/12)*3)
+        W = int(math.sqrt(L/12)*4)
         x = x.transpose(1, 2).contiguous().view(B, C, H, W)
         out = self.deconv(x).flatten(2).transpose(1,2).contiguous() # B H*W C
         return out
@@ -827,8 +829,8 @@ class OutputProj(nn.Module):
 
     def forward(self, x):
         B, L, C = x.shape
-        H = int(math.sqrt(L))
-        W = int(math.sqrt(L))
+        H = int(math.sqrt(L/12)*3)
+        W = int(math.sqrt(L/12)*4)
         x = x.transpose(1, 2).view(B, C, H, W)
         x = self.proj(x)
         if self.norm is not None:
@@ -907,8 +909,8 @@ class LeWinTransformerBlock(nn.Module):
 
     def forward(self, x, mask=None):
         B, L, C = x.shape
-        H = int(math.sqrt(L))
-        W = int(math.sqrt(L))
+        H = int(math.sqrt(L/12)*3)
+        W = int(math.sqrt(L/12)*4)
         
         ## input mask
         if mask != None:

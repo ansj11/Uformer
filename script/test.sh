@@ -1,5 +1,9 @@
+
+# python3 test/test.py --input_dir txt/test.txt --result_dir logs/denoising/car/Uformer_B_0708/test/ --weights logs/denoising/car/Uformer_B_0708/models/model_best.pth
+
+
 ### test on SIDD ###
-# python3 test/test_sidd.py --input_dir ../datasets/denoising/sidd_val/ --result_dir ./results/denoising/SIDD/ --weights ./logs/denoising/SIDD/Uformer_B/models/model_best.pth 
+python3 test/test_denoise.py --input_dir ./outputs/jietuV9/demo_frames/ --result_dir ./outputs/jietuV9/denoise/ --weights logs/denoising/car/Uformer_B_0516/models/model_best.pth
 
 ### test on DND ###
 # python3 test/test_dnd.py --input_dir ../datasets/denoising/dnd/input/ --result_dir ./results/denoising/DND/ --weights ./logs/denoising/SIDD/Uformer_B/models/model_best.pth 

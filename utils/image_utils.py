@@ -1,7 +1,9 @@
 import torch
 import numpy as np
 import pickle
+import os
 import cv2
+from pdb import set_trace
 
 def is_numpy_file(filename):
     return any(filename.endswith(extension) for extension in [".npy"])
@@ -29,7 +31,11 @@ def load_npy(filepath):
     return img
 
 def load_img(filepath):
-    img = cv2.cvtColor(cv2.imread(filepath), cv2.COLOR_BGR2RGB)
+    img = cv2.imread(filepath, -1)
+    if img.shape[-1] == 4:
+        mask = img[...,-1:] / 255.
+        img = (img[...,:-1] * mask).astype('uint8')
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = img.astype(np.float32)
     img = img/255.
     return img

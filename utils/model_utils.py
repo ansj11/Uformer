@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import os
 from collections import OrderedDict
+from pdb import set_trace
 
 def freeze(model):
     for p in model.parameters():
@@ -21,7 +22,7 @@ def save_checkpoint(model_dir, state, session):
     torch.save(state, model_out_path)
 
 def load_checkpoint(model, weights):
-    checkpoint = torch.load(weights)
+    checkpoint = torch.load(weights, map_location=torch.device('cpu'))
     try:
         model.load_state_dict(checkpoint["state_dict"])
     except:
@@ -73,9 +74,12 @@ def get_arch(opt):
     elif arch == 'Uformer_B_fastleff':
         model_restoration = Uformer(img_size=opt.train_ps,embed_dim=32,win_size=8,token_projection='linear',token_mlp='fastleff',
             depths=[1, 2, 8, 8, 2, 8, 8, 2, 1],modulator=True)  
-    elif arch == 'Uformer_B':
+    elif arch == 'Uformer_B':   # True
         model_restoration = Uformer(img_size=opt.train_ps,embed_dim=32,win_size=8,token_projection='linear',token_mlp='leff',
             depths=[1, 2, 8, 8, 2, 8, 8, 2, 1],modulator=True,dd_in=opt.dd_in)  
+    elif arch == 'Restormer':   # True
+        from restormer.restormer_arch import Restormer
+        model_restoration = Restormer()  
     else:
         raise Exception("Arch error!")
 
